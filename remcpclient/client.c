@@ -138,27 +138,39 @@ int main(int argc, char const *argv[])
         while (fgets(buffer, BUFFER_SIZE, file) != NULL)
         {
             size_t len = strlen(buffer);
-            if (len > 0 && len < BUFFER_SIZE - 2)
+
+            // Check if this is the last part of the file
+            if (len < BUFFER_SIZE - 1)
             {
-                printf("EOF\n");
+                // Append EOF to the buffer if there's space
                 buffer[len] = EOF;
+                buffer[len + 1] = '\0'; // Null-terminate the buffer
+                len += 1;               // Update length to include EOF
             }
 
-            if (send(sockfd, buffer, strlen(buffer), 0) == -1)
+            // Send the current buffer
+            if (send(sockfd, buffer, len, 0) == -1)
             {
                 perror("Erro ao enviar mensagem");
             }
             handle_receive_message(buffer, &sockfd);
 
-            if (len == BUFFER_SIZE - 1)
+            // Break the loop if this is the last chunk
+            if (len < BUFFER_SIZE - 1)
             {
-                buffer[0] = EOF;
-                if (send(sockfd, &buffer[0], strlen(&buffer[0]), 0) == -1)
-                {
-                    perror("Erro ao enviar mensagem");
-                }
-                handle_receive_message(buffer, &sockfd);
+                break;
             }
+        }
+
+        // If the file ends exactly on a buffer boundary, send EOF separately
+        if (!feof(file))
+        {
+            char eof_msg[2] = {EOF, '\0'};
+            if (send(sockfd, eof_msg, 1, 0) == -1)
+            {
+                perror("Erro ao enviar mensagem");
+            }
+            handle_receive_message(eof_msg, &sockfd);
         }
 
         fclose(file);

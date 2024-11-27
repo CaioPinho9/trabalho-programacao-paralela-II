@@ -105,6 +105,12 @@ int handle_buffer(char *buffer, int valread, int *fd, client_t *client)
         // Check if the last char of buffer is end of file rename the file removing .part
         if (buffer[valread - 1] == EOF)
         {
+            // Remove EOF from the file
+            FILE *file = fopen(file_path_with_part, "r+");
+            fseek(file, -1, SEEK_END);
+            ftruncate(fileno(file), ftell(file));
+            fclose(file);
+
             printf("Renomeando arquivo...\n");
             rename(file_path_with_part, client->file_path);
         }
