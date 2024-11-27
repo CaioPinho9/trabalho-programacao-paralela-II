@@ -146,7 +146,6 @@ int main(int argc, char const *argv[])
                 // Append EOF to the buffer if there's space
                 buffer[len] = EOF_MARKER;
                 buffer[len + 1] = '\0'; // Null-terminate the buffer
-                len += 1;               // Update length to include EOF
                 eof = 1;
                 printf("EOF encontrado\n");
             }
