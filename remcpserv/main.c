@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "../common/file_controller.h"
 
 void kill_process_on_port(int port)
 {
@@ -87,11 +88,10 @@ int handle_buffer(char *buffer, int valread, int *fd, client_t *client)
     else
     {
         printf("Thread id: %d\n", omp_get_thread_num());
-        printf("Data: '%s'\n", buffer);
-
         char file_path_with_part[BUFFER_SIZE];
         snprintf(file_path_with_part, sizeof(file_path_with_part), "%s.part", client->file_path);
-        printf("File path with part: %s\n", file_path_with_part);
+        printf("%s: '%s'\n", file_path_with_part, buffer);
+
         FILE *file = fopen(file_path_with_part, "a");
         if (file == NULL)
         {
@@ -103,7 +103,7 @@ int handle_buffer(char *buffer, int valread, int *fd, client_t *client)
         fclose(file);
 
         // Check if the last char of buffer is end of file rename the file removing .part
-        if (buffer[valread - 1] == EOF)
+        if (buffer[valread - 1] == EOF_MARKER)
         {
             // Remove EOF from the file
             FILE *file = fopen(file_path_with_part, "r+");
@@ -111,8 +111,9 @@ int handle_buffer(char *buffer, int valread, int *fd, client_t *client)
             ftruncate(fileno(file), ftell(file));
             fclose(file);
 
-            printf("Renomeando arquivo...\n");
+            printf("Renomeando %s to %s...\n", file_path_with_part, client->file_path);
             rename(file_path_with_part, client->file_path);
+            printf("Arquivo %s recebido com sucesso\n", client->file_path);
         }
     }
 
@@ -138,15 +139,13 @@ int handle_client_activity(client_t *client, struct pollfd *poolfd)
             printf("Cliente no socket %d desconectado\n", *fd);
             close(*fd);
             *fd = -1;
+            client->upload = -1;
+            client->file_path = NULL;
+            memset(client->buffer, 0, BUFFER_SIZE);
+            return 0;
         }
-        else
-        {
-            return handle_buffer(buffer, valread, fd, client);
-        }
+        return handle_buffer(buffer, valread, fd, client);
     }
-    client->upload = -1;
-    client->file_path = NULL;
-
     return 0;
 }
 
@@ -247,7 +246,7 @@ int main()
 
         // clang-format off
         // Verifica se algum cliente enviou dados
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static, 1)
         // clang-format on
         for (int i = 1; i <= MAX_CLIENTS; i++)
         {
