@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include "../common/file_controller.h"
 
 #define PORT 8080
 #define BUFFER_SIZE 256
@@ -23,6 +24,25 @@ void parse_arguments(const char *arg, char **host, char **file_path)
         // No host, only file path
         *host = "127.0.0.1";
         *file_path = strdup(arg);
+    }
+}
+
+void handle_receive_message(char *buffer, int *sockfd)
+{
+    // Recebe a resposta do servidor
+    int valread = recv(*sockfd, buffer, BUFFER_SIZE, 0);
+    if (valread > 0)
+    {
+        buffer[valread] = '\0'; // Garante que a string seja terminada com nulo
+        // printf("Mensagem recebida do servidor: %s\n", buffer);
+    }
+    else if (valread == 0)
+    {
+        printf("Servidor fechou a conexão.\n");
+    }
+    else
+    {
+        perror("Erro ao receber dados do servidor");
     }
 }
 
@@ -71,7 +91,7 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-    printf("Conectado ao servidor. Digite uma mensagem:\n");
+    printf("Conectado ao servidor. Enviando arquivo..\n");
 
     // Send the file path origin
     char upload_char = upload ? '1' : '0';
@@ -80,63 +100,68 @@ int main(int argc, char const *argv[])
         perror("Erro ao enviar mensagem");
     }
 
-    // Send the file path origin
-    if (send(sockfd, file_path_origin, strlen(file_path_origin), 0) == -1)
+    handle_receive_message(buffer, &sockfd);
+
+    // Send the file path destination
+    if (send(sockfd, file_path_destination, strlen(file_path_destination), 0) == -1)
     {
         perror("Erro ao enviar mensagem");
     }
+
+    handle_receive_message(buffer, &sockfd);
 
     // Send data from file
     if (upload)
     {
-        // FILE *file = fopen(full_path, "r");
-        // if (file == NULL)
-        // {
-        //     perror("Erro ao abrir o arquivo");
-        //     exit(EXIT_FAILURE);
-        // }
+        printf("Enviando arquivo...\n");
+        char *abs_path;
+        if (get_abs_path(file_path_origin, &abs_path) == -1)
+        {
+            perror("Erro ao obter o diretório atual");
+            exit(EXIT_FAILURE);
+        }
 
-        // while (fgets(buffer, BUFFER_SIZE, file) != NULL)
-        // {
-        //     if (send(sockfd, buffer, strlen(buffer), 0) == -1)
-        //     {
-        //         perror("Erro ao enviar mensagem");
-        //     }
-        // }
+        FILE *file = fopen(abs_path, "r");
+        if (file == NULL)
+        {
+            perror("Erro ao abrir o arquivo");
+            exit(EXIT_FAILURE);
+        }
 
-        // fclose(file);
-    }
+        if (strcmp(buffer, file_path_destination) != 0)
+        {
+            printf("Offseted by %s bytes\n", buffer);
+            // Buffer has how many bytes already were read, jump to next position
+            fseek(file, atoi(buffer), SEEK_SET);
+        }
 
-    // Lê a mensagem do usuário
-    fgets(message, BUFFER_SIZE, stdin);
-    message[strcspn(message, "\n")] = 0; // Remove o caractere de nova linha
+        while (fgets(buffer, BUFFER_SIZE, file) != NULL)
+        {
+            size_t len = strlen(buffer);
+            if (len > 0 && len < BUFFER_SIZE - 2)
+            {
+                printf("EOF\n");
+                buffer[len] = EOF;
+            }
 
-    // Envia a mensagem ao servidor
-    if (send(sockfd, message, strlen(message), 0) == -1)
-    {
-        perror("Erro ao enviar mensagem");
-    }
+            if (send(sockfd, buffer, strlen(buffer), 0) == -1)
+            {
+                perror("Erro ao enviar mensagem");
+            }
+            handle_receive_message(buffer, &sockfd);
 
-    // Verifica se o cliente deseja sair
-    if (strcmp(message, "exit") == 0)
-    {
-        printf("Encerrando a conexão...\n");
-    }
+            if (len == BUFFER_SIZE - 1)
+            {
+                buffer[0] = EOF;
+                if (send(sockfd, &buffer[0], strlen(&buffer[0]), 0) == -1)
+                {
+                    perror("Erro ao enviar mensagem");
+                }
+                handle_receive_message(buffer, &sockfd);
+            }
+        }
 
-    // Recebe a resposta do servidor
-    int valread = recv(sockfd, buffer, BUFFER_SIZE, 0);
-    if (valread > 0)
-    {
-        buffer[valread] = '\0'; // Garante que a string seja terminada com nulo
-        printf("Mensagem recebida do servidor: %s\n", buffer);
-    }
-    else if (valread == 0)
-    {
-        printf("Servidor fechou a conexão.\n");
-    }
-    else
-    {
-        perror("Erro ao receber dados do servidor");
+        fclose(file);
     }
 
     // Fecha o socket

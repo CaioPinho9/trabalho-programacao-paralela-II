@@ -1,0 +1,117 @@
+Editor de texto Nano:
+nano Ctrl^K Ctrl^U 
+
+Multiplexador de terminais:
+tmux
+Ctrl B %     (divide verticalmente)
+Ctrl B "     (divide horizontalmente)  (às vezes precisa digitar espaço depois do ")
+Ctrl B setas (trocar janela)
+Ctrl B x     (mata o painel)
+Ctrl B z     (zoom in ou out do painel)
+Ctrl B [     (habilitar scroll)  
+q            (desabilitar scroll)  
+
+Roteiro para a prática:
+1) Mostrar socket AF_UNIX:
+- compilar:
+ gcc servidor1.c -o servidor1 
+ gcc cliente1.c -o cliente1
+
+- executar servidor
+ ./servidor1
+
+- executar clientes:
+ ./cliente1
+ ./cliente1 & ./cliente1
+
+2) Depurar informações sobre o socket UNIX aberto:
+ ./servidor1
+ ls -l
+ ls -lF (o F adicona caracteres para marcar os tipos de arquivos)
+
+3) lsof: list open files
+lsof 
+man lsof
+lsof -p $PID
+
+AF_INET: Programação Distribuída
+
+4) Mostrar socket AF_INET:
+- compilar:
+ gcc servidor2.c -o servidor2 
+ gcc cliente2.c -o cliente2
+
+5) verificar se o socket está aberto antes de executar o servidor: 
+lsof -i :9734
+
+Executar servidor e cliente:
+./servidor2
+./cliente2
+
+
+6) Testar servidores com telnet e netcat (nc)
+
+nc host port      (protocolo padrão é o TCP)
+nc -u host port   (protocolo UDP) 
+
+nc 127.0.0.1 9734
+telnet 127.0.0.1 9734
+
+passando a entrada na linha de comando:
+
+printf 'A\n' | nc 127.0.0.1 9734
+
+7) Verificar se o socket está aberto após executar o servidor: 
+./servidor2
+lsof -i :9734
+
+8) Deixar um terminal aberto com:
+watch lsof -i :9734
+
+
+9) Mudar o endereço IP
+- mostrar endereços disponíveis
+   ifconfig  // ou
+   ip a
+
+- exibir o arquivo /etc/hosts
+
+- alterar o cliente para submeter usando outra interface de rede
+    //address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    address.sin_addr.s_addr = inet_addr("192.168.0.14");
+
+- alterar o servidor para escutar de uma interface específica (diferente do cliente) e mostrar que a requisição não chegará
+    //server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+10) Netstat
+
+- exibir todas as conexões
+netstat -a | more
+
+- exibir todas as conexões tcp
+netstat -at
+
+- exibir todas as conexões tcp aguardando por conexões
+netstat -tl
+
+- exibir detalhes do processo aguardando por conexões
+netstat -tlp
+
+11) Atrasar a leitura de um canal e observar o tamanho da fila do socket
+Recv-Q Send-Q
+- adicionar um sleep(15) antes do write do cliente
+- adicionar um sleep(15) antes do read do cliente
+- verificar o estado do socket na porta usada para a comunicacao
+
+- Deixar um terminal aberto com:
+  watch 'netstat -tnp | grep 9734'
+  ./cliente2
+  ./cliente2 & ./cliente2 &
+ 
+12) tcpdump
+sudo tcpdump -A -i lo port 9734
+
+Observar os valores de length maiores que 0 (significa que tem payload na mensagem)
+Observar os valores A e B nas mensagens trocadas
+
