@@ -3,13 +3,13 @@
 ## server
 
 ```bash
-gcc -o main main.c common/file_controller.c -lpthread -fopenmp
+gcc -o main remcpserv/main.c -lpthread -fopenmp common/file_controller/file_controller.c common/socket/socket.c
 ```
 
 ## client
 
 ```bash
-gcc -o client remcpclient/client.c common/file_controller.c
+gcc -o client remcpclient/client.c common/file_controller/file_controller.c common/socket/socket.c
 ```
 
 ## file checker
