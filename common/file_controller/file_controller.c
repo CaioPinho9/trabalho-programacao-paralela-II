@@ -36,7 +36,6 @@ int get_abs_path(char *file_path, char **abs_path)
 int get_part_file_path(char *file_path, char **file_path_with_part)
 {
     size_t required_size = strlen(file_path) + strlen(".part") + 1; // +1 for '\0'
-    printf("Required size: %ld\n", required_size);
 
     *file_path_with_part = malloc(required_size);
     if (*file_path_with_part == NULL)

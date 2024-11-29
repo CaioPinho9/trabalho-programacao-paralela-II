@@ -37,6 +37,8 @@ int receive_file(int socket_fd, message_t *message)
 
         int result = handle_write_part_file(message->buffer, valread, message);
 
+        send(socket_fd, message->buffer, strlen(message->buffer), 0);
+
         if (result != 0)
         {
             return result;
@@ -56,6 +58,7 @@ int main(int argc, char const *argv[])
     char *file_path_origin = NULL;
     char *host_destination = NULL;
     char *file_path_destination = NULL;
+    char *host_server = NULL;
     int upload = 0;
 
     parse_arguments(argv[1], &host_origin, &file_path_origin);
@@ -63,11 +66,20 @@ int main(int argc, char const *argv[])
 
     upload = strcmp(host_origin, "127.0.0.1") == 0;
 
+    if (upload)
+    {
+        host_server = host_destination;
+    }
+    else
+    {
+        host_server = host_origin;
+    }
+
     int socket_fd;
     struct sockaddr_in address;
     char buffer[BUFFER_SIZE];
 
-    create_socket(&socket_fd, &address, host_destination);
+    create_socket(&socket_fd, &address, host_server);
 
     if (connect(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {

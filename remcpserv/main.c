@@ -45,7 +45,6 @@ void kill_process_on_port(int port)
 int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
 {
     buffer[valread] = '\0';
-    printf("Recebido: %s\n", buffer);
 
     if (client->upload == -1)
     {
@@ -68,6 +67,11 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
         {
             perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
         }
+
+        if (!client->upload)
+        {
+            send_file(socket_fd, client, client->file_path);
+        }
     }
     else if (client->upload)
     {
@@ -77,10 +81,6 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
             return 0;
         }
         send(socket_fd, buffer, strlen(buffer), 0);
-    }
-    else
-    {
-        send_file(socket_fd, client, client->file_path);
     }
 
     return 0;
