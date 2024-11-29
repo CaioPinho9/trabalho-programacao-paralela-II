@@ -33,16 +33,26 @@ int get_abs_path(char *file_path, char **abs_path)
     return 0;
 }
 
-int get_part_file_path(char *file_path, char *file_path_with_part)
+int get_part_file_path(char *file_path, char **file_path_with_part)
 {
-    snprintf(file_path_with_part, sizeof(file_path_with_part), "%s.part", file_path);
+    size_t required_size = strlen(file_path) + strlen(".part") + 1; // +1 for '\0'
+    printf("Required size: %ld\n", required_size);
+
+    *file_path_with_part = malloc(required_size);
+    if (*file_path_with_part == NULL)
+    {
+        perror("malloc failed");
+        free(file_path_with_part);
+        return -1;
+    }
+    snprintf(*file_path_with_part, required_size, "%s.part", file_path);
     return 0;
 }
 
 int handle_write_part_file(char *buffer, int valread, message_t *client)
 {
-    char file_path_with_part[512];
-    get_part_file_path(client->file_path, file_path_with_part);
+    char *file_path_with_part;
+    get_part_file_path(client->file_path, &file_path_with_part);
 
     FILE *file = fopen(file_path_with_part, "a");
     if (file == NULL)
@@ -66,8 +76,10 @@ int handle_write_part_file(char *buffer, int valread, message_t *client)
         printf("Renomeando %s to %s...\n", file_path_with_part, client->file_path);
         rename(file_path_with_part, client->file_path);
         printf("Arquivo %s recebido com sucesso\n", client->file_path);
+        free(file_path_with_part);
         return 1;
     }
+    free(file_path_with_part);
     return 0;
 }
 

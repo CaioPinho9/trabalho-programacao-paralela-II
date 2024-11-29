@@ -58,11 +58,12 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
         client->file_path = strdup(buffer);
         printf("File path: %s\n", client->file_path);
 
-        char file_path_with_part[512];
-        get_part_file_path(client->file_path, file_path_with_part);
+        char *file_path_with_part;
+        get_part_file_path(client->file_path, &file_path_with_part);
         printf("Part file path: %s\n", file_path_with_part);
         char size_str[32];
         get_size_file(file_path_with_part, size_str);
+        free(file_path_with_part);
         if (send(socket_fd, size_str, strlen(size_str), 0) == -1)
         {
             perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);

@@ -13,7 +13,7 @@
 
 int get_abs_path(char *file_path, char **abs_path);
 
-int get_part_file_path(char *file_path, char *file_path_with_part);
+int get_part_file_path(char *file_path, char **file_path_with_part);
 
 int handle_write_part_file(char *buffer, int valread, message_t *client);
 
