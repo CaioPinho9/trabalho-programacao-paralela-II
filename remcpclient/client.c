@@ -32,17 +32,15 @@ int receive_file(int socket_fd, message_t *message)
 {
     while (1)
     {
-        int valread = recv(socket_fd, message->buffer, BUFFER_SIZE, 0);
-        handle_receive_message(socket_fd, message->buffer);
+        int valread = handle_receive_message(socket_fd, &message->buffer);
 
         int result = handle_write_part_file(message->buffer, valread, message);
-
-        send(socket_fd, message->buffer, strlen(message->buffer), 0);
 
         if (result != 0)
         {
             return result;
         }
+        send(socket_fd, message->buffer, strlen(message->buffer), 0);
     }
 }
 
@@ -65,6 +63,7 @@ int main(int argc, char const *argv[])
     parse_arguments(argv[2], &host_destination, &file_path_destination);
 
     upload = strcmp(host_origin, "127.0.0.1") == 0;
+    upload = 0;
 
     if (upload)
     {
@@ -90,27 +89,27 @@ int main(int argc, char const *argv[])
     printf("Conectado ao servidor. Enviando arquivo..\n");
 
     message_t *message = (message_t *)malloc(sizeof(message_t));
-    message->buffer = buffer;
+    message->buffer = (char *)malloc(BUFFER_SIZE);
     message->upload = upload;
 
     // Send data from file
     if (upload)
     {
-        message->file_path = file_path_destination;
         send_upload(socket_fd, message);
-        send_file_path(socket_fd, message);
+        send_file_path(socket_fd, message, file_path_destination);
         send_file(socket_fd, message, file_path_origin);
     }
     else
     {
-        message->file_path = file_path_origin;
         send_upload(socket_fd, message);
-        send_file_path(socket_fd, message);
+        send_file_path(socket_fd, message, file_path_origin);
+        message->file_path = file_path_destination;
+        send_offset_size(socket_fd, message, file_path_destination);
         receive_file(socket_fd, message);
     }
 
-    free(message);
     close(socket_fd);
+    free(message);
 
     return 0;
 }

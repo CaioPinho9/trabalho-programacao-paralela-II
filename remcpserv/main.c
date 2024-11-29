@@ -40,71 +40,73 @@ void kill_process_on_port(int port)
     }
 }
 
-#define MAX_CLIENTS 10
+#define MAX_messageS 10
 
-int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
+int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
 {
     buffer[valread] = '\0';
 
-    if (client->upload == -1)
+    if (message->upload == -1)
     {
-        client->upload = atoi(buffer);
-        printf("Upload: %d\n", client->upload);
+        message->upload = atoi(buffer);
+        printf("Upload: %d\n", message->upload);
         send(socket_fd, buffer, strlen(buffer), 0);
     }
-    else if (client->file_path == NULL)
+    else if (message->file_path == NULL)
     {
-        client->file_path = strdup(buffer);
-        printf("File path: %s\n", client->file_path);
+        message->file_path = strdup(buffer);
+        printf("File path: %s\n", message->file_path);
 
-        char *file_path_with_part;
-        get_part_file_path(client->file_path, &file_path_with_part);
-        printf("Part file path: %s\n", file_path_with_part);
-        char size_str[32];
-        get_size_file(file_path_with_part, size_str);
-        free(file_path_with_part);
-        if (send(socket_fd, size_str, strlen(size_str), 0) == -1)
+        if (message->upload)
         {
-            perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
+            send_offset_size(socket_fd, message, message->file_path);
         }
-
-        if (!client->upload)
+        else
         {
-            send_file(socket_fd, client, client->file_path);
+            send(socket_fd, buffer, strlen(buffer), 0);
         }
     }
-    else if (client->upload)
+    else if (message->upload)
     {
-        if (handle_write_part_file(buffer, valread, client) == -1)
+        if (handle_write_part_file(buffer, valread, message) == -1)
         {
             perror(INVALID_FILE_PATH_EXCEPTION);
             return 0;
         }
         send(socket_fd, buffer, strlen(buffer), 0);
     }
+    else
+    {
+        printf("Enviando arquivo...\n");
+        if (send_file(socket_fd, message, message->file_path) == -1)
+        {
+            perror(FILE_NOT_FOUND_EXCEPTION);
+            return 0;
+        }
+    }
 
     return 0;
 }
 
-int handle_client_activity(message_t *client, struct pollfd *poolfd)
+int handle_message_activity(message_t *message, struct pollfd *poolfd)
 {
     int *socket_fd = &poolfd->fd;
-    char *buffer = client->buffer;
+    char *buffer = message->buffer;
     if (*socket_fd != -1 && (poolfd->revents & POLLIN))
     {
         int valread = read(*socket_fd, buffer, BUFFER_SIZE);
         if (valread == 0)
         {
-            // Cliente desconectado
-            printf("Cliente no socket %d desconectado\n", *socket_fd);
+            // messagee desconectado
+            printf("messagee no socket %d desconectado\n", *socket_fd);
             close(*socket_fd);
             *socket_fd = -1;
-            client->upload = -1;
-            client->file_path = NULL;
-            memset(client->buffer, 0, BUFFER_SIZE);
+            message->upload = -1;
+            message->file_path = NULL;
+            memset(message->buffer, 0, BUFFER_SIZE);
             return 0;
         }
-        return handle_buffer(buffer, valread, *socket_fd, client);
+        return handle_buffer(buffer, valread, *socket_fd, message);
     }
     return 0;
 }
@@ -115,8 +117,8 @@ int main()
 
     int socket_fd, new_socket;
     struct sockaddr_in address;
-    struct pollfd poolfd[MAX_CLIENTS + 1];
-    message_t clients[MAX_CLIENTS + 1];
+    struct pollfd poolfd[MAX_messageS + 1];
+    message_t messages[MAX_messageS + 1];
     int addrlen = sizeof(address);
     int activity;
 
@@ -139,15 +141,15 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i <= MAX_CLIENTS; i++)
+    for (int i = 0; i <= MAX_messageS; i++)
     {
         poolfd[i].fd = -1;
-        clients[i].upload = -1;
-        clients[i].file_path = NULL;
-        clients[i].buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
+        messages[i].upload = -1;
+        messages[i].file_path = NULL;
+        messages[i].buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
     }
 
-    for (int i = 0; i <= MAX_CLIENTS; i++)
+    for (int i = 0; i <= MAX_messageS; i++)
     {
         poolfd[i].fd = -1;
     }
@@ -159,7 +161,7 @@ int main()
 
     while (1)
     {
-        activity = poll(poolfd, MAX_CLIENTS + 1, -1);
+        activity = poll(poolfd, MAX_messageS + 1, -1);
 
         if (activity < 0)
         {
@@ -179,7 +181,7 @@ int main()
 
             printf("Nova conexão aceita, socket fd: %d\n", new_socket);
 
-            for (int i = 1; i <= MAX_CLIENTS; i++)
+            for (int i = 1; i <= MAX_messageS; i++)
             {
                 if (poolfd[i].fd == -1)
                 {
@@ -193,9 +195,9 @@ int main()
         // clang-format off
         #pragma omp parallel for schedule(static, 1)
         // clang-format on
-        for (int i = 1; i <= MAX_CLIENTS; i++)
+        for (int i = 1; i <= MAX_messageS; i++)
         {
-            if (handle_client_activity(&clients[i], &poolfd[i]) == -1)
+            if (handle_message_activity(&messages[i], &poolfd[i]) == -1)
             {
                 close(socket_fd);
                 exit(EXIT_SUCCESS);
