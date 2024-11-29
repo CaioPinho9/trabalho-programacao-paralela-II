@@ -5,7 +5,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include "../common/file_controller.h"
+#include "../common/file_controller/file_controller.h"
+#include "../common/socket/socket.h"
 
 #define PORT 8080
 #define BUFFER_SIZE 256
@@ -27,22 +28,19 @@ void parse_arguments(const char *arg, char **host, char **file_path)
     }
 }
 
-void handle_receive_message(char *buffer, int *sockfd)
+int receive_file(int socket_fd, message_t *message)
 {
-    // Recebe a resposta do servidor
-    int valread = recv(*sockfd, buffer, BUFFER_SIZE, 0);
-    if (valread > 0)
+    while (1)
     {
-        buffer[valread] = '\0'; // Garante que a string seja terminada com nulo
-        // printf("Mensagem recebida do servidor: %s\n", buffer);
-    }
-    else if (valread == 0)
-    {
-        printf("Servidor fechou a conexão.\n");
-    }
-    else
-    {
-        perror("Erro ao receber dados do servidor");
+        int valread = recv(socket_fd, message->buffer, BUFFER_SIZE, 0);
+        handle_receive_message(socket_fd, message->buffer);
+
+        int result = handle_write_part_file(message->buffer, valread, message);
+
+        if (result != 0)
+        {
+            return result;
+        }
     }
 }
 
@@ -60,34 +58,20 @@ int main(int argc, char const *argv[])
     char *file_path_destination = NULL;
     int upload = 0;
 
-    // Parse the first argument
     parse_arguments(argv[1], &host_origin, &file_path_origin);
-    // Parse the second argument
     parse_arguments(argv[2], &host_destination, &file_path_destination);
 
     upload = strcmp(host_origin, "127.0.0.1") == 0;
 
-    int sockfd;
-    struct sockaddr_in server_addr;
+    int socket_fd;
+    struct sockaddr_in address;
     char buffer[BUFFER_SIZE];
-    char message[BUFFER_SIZE];
 
-    // Cria o socket
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    create_socket(&socket_fd, &address, host_destination);
+
+    if (connect(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
-        perror("Erro ao criar socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // Configurações do servidor
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = inet_addr(host_destination); // Conecta ao servidor local
-
-    // Conecta ao servidor
-    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        perror("Erro ao conectar ao servidor");
+        perror(CONNECTION_EXCEPTION);
         exit(EXIT_FAILURE);
     }
 
@@ -95,84 +79,43 @@ int main(int argc, char const *argv[])
 
     // Send the file path origin
     char upload_char = upload ? '1' : '0';
-    if (send(sockfd, &upload_char, sizeof(char), 0) == -1)
+    if (send(socket_fd, &upload_char, sizeof(char), 0) == -1)
     {
-        perror("Erro ao enviar mensagem");
+        perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
     }
 
-    handle_receive_message(buffer, &sockfd);
+    handle_receive_message(socket_fd, buffer);
 
     // Send the file path destination
-    if (send(sockfd, file_path_destination, strlen(file_path_destination), 0) == -1)
+    if (send(socket_fd, file_path_destination, strlen(file_path_destination), 0) == -1)
     {
-        perror("Erro ao enviar mensagem");
+        perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
     }
 
-    handle_receive_message(buffer, &sockfd);
+    handle_receive_message(socket_fd, buffer);
+
+    message_t *message = (message_t *)malloc(sizeof(message_t));
+    message->buffer = buffer;
+    message->upload = upload;
 
     // Send data from file
     if (upload)
     {
-        printf("Enviando arquivo...\n");
-        char *abs_path;
-        if (get_abs_path(file_path_origin, &abs_path) == -1)
-        {
-            perror("Erro ao obter o diretório atual");
-            exit(EXIT_FAILURE);
-        }
-
-        FILE *file = fopen(abs_path, "r");
-        if (file == NULL)
-        {
-            perror("Erro ao abrir o arquivo");
-            exit(EXIT_FAILURE);
-        }
-
-        if (strcmp(buffer, file_path_destination) != 0)
-        {
-            printf("Offseted by %s bytes\n", buffer);
-            // Buffer has how many bytes already were read, jump to next position
-            fseek(file, atoi(buffer), SEEK_SET);
-        }
-
-        int eof = 0;
-        while (fgets(buffer, BUFFER_SIZE, file) != NULL)
-        {
-            size_t len = strlen(buffer);
-
-            // Check if this is the last part of the file
-            if (len < BUFFER_SIZE - 1)
-            {
-                // Append EOF to the buffer if there's space
-                buffer[len] = EOF_MARKER;
-                buffer[len + 1] = '\0'; // Null-terminate the buffer
-                eof = 1;
-                printf("EOF encontrado\n");
-            }
-
-            if (send(sockfd, buffer, strlen(buffer), 0) == -1)
-            {
-                perror("Erro ao enviar mensagem");
-            }
-            handle_receive_message(buffer, &sockfd);
-        }
-        if (!eof)
-        {
-            // Send EOF
-            printf("Enviando EOF...\n");
-            char eof_marker = EOF;
-            if (send(sockfd, &eof_marker, 1, 0) == -1)
-            {
-                perror("Erro ao enviar EOF");
-            }
-            handle_receive_message(buffer, &sockfd);
-        }
-
-        fclose(file);
+        message->file_path = file_path_destination;
+        send_upload(socket_fd, message);
+        send_file_path(socket_fd, message);
+        send_file(socket_fd, message, file_path_origin);
+    }
+    else
+    {
+        message->file_path = file_path_origin;
+        send_upload(socket_fd, message);
+        send_file_path(socket_fd, message);
+        receive_file(socket_fd, message);
     }
 
-    // Fecha o socket
-    close(sockfd);
+    free(message);
+    close(socket_fd);
 
     return 0;
 }

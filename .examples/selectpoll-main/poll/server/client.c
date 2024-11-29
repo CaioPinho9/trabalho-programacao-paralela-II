@@ -11,13 +11,13 @@
 
 int main()
 {
-    int sockfd;
+    int socket_fd;
     struct sockaddr_in server_addr;
     char buffer[BUFFER_SIZE];
     char message[BUFFER_SIZE];
 
     // Cria o socket
-    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         perror("Erro ao criar socket");
         exit(EXIT_FAILURE);
@@ -29,7 +29,7 @@ int main()
     server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Conecta ao servidor local
 
     // Conecta ao servidor
-    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+    if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
         perror("Erro ao conectar ao servidor");
         exit(EXIT_FAILURE);
@@ -45,9 +45,9 @@ int main()
         message[strcspn(message, "\n")] = 0; // Remove o caractere de nova linha
 
         // Envia a mensagem ao servidor
-        if (send(sockfd, message, strlen(message), 0) == -1)
+        if (send(socket_fd, message, strlen(message), 0) == -1)
         {
-            perror("Erro ao enviar mensagem");
+            perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
         }
 
         // Verifica se o cliente deseja sair
@@ -58,7 +58,7 @@ int main()
         }
 
         // Recebe a resposta do servidor
-        int valread = recv(sockfd, buffer, BUFFER_SIZE, 0);
+        int valread = recv(socket_fd, buffer, BUFFER_SIZE, 0);
         if (valread > 0)
         {
             buffer[valread] = '\0'; // Garante que a string seja terminada com nulo
@@ -76,7 +76,7 @@ int main()
     }
 
     // Fecha o socket
-    close(sockfd);
+    close(socket_fd);
 
     return 0;
 }

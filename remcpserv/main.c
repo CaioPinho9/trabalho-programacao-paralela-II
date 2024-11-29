@@ -10,7 +10,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "../common/file_controller.h"
+#include "../common/file_controller/file_controller.h"
+#include "../common/socket/socket.h"
 
 void kill_process_on_port(int port)
 {
@@ -39,112 +40,90 @@ void kill_process_on_port(int port)
     }
 }
 
-#define PORT 8080
 #define MAX_CLIENTS 10
-#define BUFFER_SIZE 256
 
-typedef struct client_t
-{
-    char *file_path;
-    int upload;
-    char *buffer;
-} client_t;
-
-int handle_buffer(char *buffer, int valread, int *fd, client_t *client)
+int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
 {
     buffer[valread] = '\0';
+    printf("Recebido: %s\n", buffer);
 
     if (client->upload == -1)
     {
-        printf("Thread id: %d\n", omp_get_thread_num());
-        printf("Upload: %d\n", client->upload);
         client->upload = atoi(buffer);
         printf("Upload: %d\n", client->upload);
+        send(socket_fd, buffer, strlen(buffer), 0);
     }
     else if (client->file_path == NULL)
     {
-        printf("Thread id: %d\n", omp_get_thread_num());
-        printf("File path: %s\n", client->file_path);
         client->file_path = strdup(buffer);
-        printf("File path: %s\n", buffer);
+        printf("File path: %s\n", client->file_path);
 
-        char file_path_with_part[BUFFER_SIZE];
-        snprintf(file_path_with_part, sizeof(file_path_with_part), "%s.part", client->file_path); // Check if the file already exists
-        FILE *file = fopen(file_path_with_part, "r");
-        if (file != NULL)
+        int exists = file_exists(client->file_path);
+        if (exists && client->upload)
         {
-            // send the size of the file
-            fseek(file, 0, SEEK_END);
-            long size = ftell(file);
-            char size_str[32];
-            snprintf(size_str, sizeof(size_str), "%ld", size);
-            if (send(*fd, size_str, strlen(size_str), 0) == -1)
+            printf(FILE_EXISTS_EXCEPTION);
+            if (send(socket_fd, FILE_EXISTS_EXCEPTION, strlen(FILE_EXISTS_EXCEPTION), 0) == -1)
             {
-                perror("Erro ao enviar mensagem");
+                perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
             }
+        }
+        else if (!exists && !client->upload)
+        {
+            printf(FILE_NOT_FOUND_EXCEPTION);
+            if (send(socket_fd, FILE_NOT_FOUND_EXCEPTION, strlen(FILE_NOT_FOUND_EXCEPTION), 0) == -1)
+            {
+                perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
+            }
+        }
+
+        char file_path_with_part[512];
+        get_part_file_path(client->file_path, file_path_with_part);
+        printf("Part file path: %s\n", file_path_with_part);
+        char size_str[32];
+        get_size_file(file_path_with_part, size_str);
+        if (send(socket_fd, size_str, strlen(size_str), 0) == -1)
+        {
+            perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
+        }
+
+        return 0;
+    }
+    else if (client->upload)
+    {
+        if (handle_write_part_file(buffer, valread, client) == -1)
+        {
+            perror(INVALID_FILE_PATH_EXCEPTION);
             return 0;
         }
+        send(socket_fd, buffer, strlen(buffer), 0);
     }
     else
     {
-        printf("Thread id: %d\n", omp_get_thread_num());
-        char file_path_with_part[BUFFER_SIZE];
-        snprintf(file_path_with_part, sizeof(file_path_with_part), "%s.part", client->file_path);
-        printf("%s: '%s'\n", file_path_with_part, buffer);
-
-        FILE *file = fopen(file_path_with_part, "a");
-        if (file == NULL)
-        {
-            perror("Erro ao abrir o arquivo");
-            return -1;
-        }
-
-        fprintf(file, "%s", buffer);
-        fclose(file);
-
-        // Check if the last char of buffer is end of file rename the file removing .part
-        if (buffer[valread - 1] == EOF_MARKER)
-        {
-            // Remove EOF from the file
-            FILE *file = fopen(file_path_with_part, "r+");
-            fseek(file, -1, SEEK_END);
-            ftruncate(fileno(file), ftell(file));
-            fclose(file);
-
-            printf("Renomeando %s to %s...\n", file_path_with_part, client->file_path);
-            rename(file_path_with_part, client->file_path);
-            printf("Arquivo %s recebido com sucesso\n", client->file_path);
-        }
-    }
-
-    // Envia a resposta de volta para o mesmo cliente
-    if (send(*fd, buffer, valread, 0) == -1)
-    {
-        perror("Erro ao enviar dados ao cliente");
+        send_file(socket_fd, client, client->file_path);
     }
 
     return 0;
 }
 
-int handle_client_activity(client_t *client, struct pollfd *poolfd)
+int handle_client_activity(message_t *client, struct pollfd *poolfd)
 {
-    int *fd = &poolfd->fd;
+    int *socket_fd = &poolfd->fd;
     char *buffer = client->buffer;
-    if (*fd != -1 && (poolfd->revents & POLLIN))
+    if (*socket_fd != -1 && (poolfd->revents & POLLIN))
     {
-        int valread = read(*fd, buffer, BUFFER_SIZE);
+        int valread = read(*socket_fd, buffer, BUFFER_SIZE);
         if (valread == 0)
         {
             // Cliente desconectado
-            printf("Cliente no socket %d desconectado\n", *fd);
-            close(*fd);
-            *fd = -1;
+            printf("Cliente no socket %d desconectado\n", *socket_fd);
+            close(*socket_fd);
+            *socket_fd = -1;
             client->upload = -1;
             client->file_path = NULL;
             memset(client->buffer, 0, BUFFER_SIZE);
             return 0;
         }
-        return handle_buffer(buffer, valread, fd, client);
+        return handle_buffer(buffer, valread, *socket_fd, client);
     }
     return 0;
 }
@@ -153,113 +132,97 @@ int main()
 {
     kill_process_on_port(PORT);
 
-    int server_fd, new_socket;
+    int socket_fd, new_socket;
     struct sockaddr_in address;
     struct pollfd poolfd[MAX_CLIENTS + 1];
-    client_t clients[MAX_CLIENTS + 1]; // Estrutura para os descritores de arquivo
+    message_t clients[MAX_CLIENTS + 1];
     int addrlen = sizeof(address);
     int activity;
 
-    // Cria o socket do servidor
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+    create_socket(&socket_fd, &address, NULL);
+
+    struct linger so_linger = {1, 0}; // Close immediately on shutdown
+    setsockopt(socket_fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+
+    if (bind(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
-        perror("Erro ao criar o socket");
+        perror(SOCKET_BIND_EXCEPTION);
+        close(socket_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Configurações do servidor
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
-
-    // Associa o socket ao endereço IP e à porta
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    if (listen(socket_fd, 3) < 0)
     {
-        perror("Erro ao associar o socket");
-        close(server_fd);
+        perror(SOCKET_LISTEN_EXCEPTION);
+        close(socket_fd);
         exit(EXIT_FAILURE);
     }
 
-    // Coloca o socket em modo de escuta
-    if (listen(server_fd, 3) < 0)
-    {
-        perror("Erro na função listen");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // Inicializa os descritores de arquivo para o poll()
     for (int i = 0; i <= MAX_CLIENTS; i++)
     {
-        poolfd[i].fd = -1;           // Define todos os sockets como não usados
-        clients[i].upload = -1;      // Initialize upload to -1
-        clients[i].file_path = NULL; // Initialize file_path to NULL
+        poolfd[i].fd = -1;
+        clients[i].upload = -1;
+        clients[i].file_path = NULL;
         clients[i].buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
     }
 
     for (int i = 0; i <= MAX_CLIENTS; i++)
     {
-        poolfd[i].fd = -1; // Define todos os sockets como não usados
+        poolfd[i].fd = -1;
     }
 
-    // O socket do servidor é o primeiro
-    poolfd[0].fd = server_fd;
+    poolfd[0].fd = socket_fd;
     poolfd[0].events = POLLIN;
 
     printf("Escutando...\n");
 
     while (1)
     {
-        // Chama a função poll para monitorar os sockets
         activity = poll(poolfd, MAX_CLIENTS + 1, -1);
 
         if (activity < 0)
         {
-            perror("Erro na função poll");
-            close(server_fd);
+            perror(POOL_EXCEPTION);
+            close(socket_fd);
             exit(EXIT_FAILURE);
         }
 
-        // Verifica se há uma nova conexão
         if (poolfd[0].revents & POLLIN)
         {
-            new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+            new_socket = accept(socket_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
             if (new_socket < 0)
             {
-                perror("Erro ao aceitar a conexão");
+                perror(ACCEPT_EXCEPTION);
                 continue;
             }
 
             printf("Nova conexão aceita, socket fd: %d\n", new_socket);
 
-            // Adiciona o novo socket à estrutura pollfd
             for (int i = 1; i <= MAX_CLIENTS; i++)
             {
                 if (poolfd[i].fd == -1)
                 {
                     poolfd[i].fd = new_socket;
-                    poolfd[i].events = POLLIN; // Monitorar leitura
+                    poolfd[i].events = POLLIN;
                     break;
                 }
             }
         }
 
         // clang-format off
-        // Verifica se algum cliente enviou dados
         #pragma omp parallel for schedule(static, 1)
         // clang-format on
         for (int i = 1; i <= MAX_CLIENTS; i++)
         {
             if (handle_client_activity(&clients[i], &poolfd[i]) == -1)
             {
-                close(server_fd);
+                close(socket_fd);
                 exit(EXIT_SUCCESS);
             }
         }
     }
 
-    // Fecha o socket do servidor
-    close(server_fd);
+    close(socket_fd);
 
     return 0;
 }

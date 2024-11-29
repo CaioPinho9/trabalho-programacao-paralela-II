@@ -7,30 +7,31 @@
 #include <stdlib.h>
 int main()
 {
-  int sockfd;
+  int socket_fd;
   int len;
   struct sockaddr_in address;
   int result;
   char str[1024] = "Alo mundo";
 
-  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = inet_addr("127.0.0.1");
-  //address.sin_addr.s_addr = inet_addr("192.168.0.15");
-  //address.sin_addr.s_addr = htonl(INADDR_ANY);
+  // address.sin_addr.s_addr = inet_addr("192.168.0.15");
+  // address.sin_addr.s_addr = htonl(INADDR_ANY);
   address.sin_port = htons(9734);
 
   len = sizeof(address);
-  result = connect(sockfd, (struct sockaddr *)&address, len);
-  if(result == -1) {
-		perror("oops: client1");
-		exit(1);
+  result = connect(socket_fd, (struct sockaddr *)&address, len);
+  if (result == -1)
+  {
+    perror("oops: client1");
+    exit(1);
   }
-	write(sockfd, &str, 1024);
-	//sleep(30);
-	read(sockfd, &str, 1024);
-	printf("mensagem do servidor: %s\n", str);
-	close(sockfd);
-	exit(0);
+  write(socket_fd, &str, 1024);
+  // sleep(30);
+  read(socket_fd, &str, 1024);
+  printf("mensagem do servidor: %s\n", str);
+  close(socket_fd);
+  exit(0);
 }
