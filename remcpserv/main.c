@@ -58,24 +58,6 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
         client->file_path = strdup(buffer);
         printf("File path: %s\n", client->file_path);
 
-        int exists = file_exists(client->file_path);
-        if (exists && client->upload)
-        {
-            printf(FILE_EXISTS_EXCEPTION);
-            if (send(socket_fd, FILE_EXISTS_EXCEPTION, strlen(FILE_EXISTS_EXCEPTION), 0) == -1)
-            {
-                perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
-            }
-        }
-        else if (!exists && !client->upload)
-        {
-            printf(FILE_NOT_FOUND_EXCEPTION);
-            if (send(socket_fd, FILE_NOT_FOUND_EXCEPTION, strlen(FILE_NOT_FOUND_EXCEPTION), 0) == -1)
-            {
-                perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
-            }
-        }
-
         char file_path_with_part[512];
         get_part_file_path(client->file_path, file_path_with_part);
         printf("Part file path: %s\n", file_path_with_part);
@@ -85,8 +67,6 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *client)
         {
             perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
         }
-
-        return 0;
     }
     else if (client->upload)
     {

@@ -22,7 +22,8 @@ void create_socket(int *socket_fd, struct sockaddr_in *address, char *host_desti
 void send_upload(int socket_fd, message_t *message)
 {
     printf("Enviando upload...\n");
-    if (send(socket_fd, message->buffer, sizeof(char), 0) == -1)
+    char upload_char = message->upload ? '1' : '0';
+    if (send(socket_fd, &upload_char, sizeof(char), 0) == -1)
     {
         perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
     }

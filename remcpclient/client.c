@@ -77,23 +77,6 @@ int main(int argc, char const *argv[])
 
     printf("Conectado ao servidor. Enviando arquivo..\n");
 
-    // Send the file path origin
-    char upload_char = upload ? '1' : '0';
-    if (send(socket_fd, &upload_char, sizeof(char), 0) == -1)
-    {
-        perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
-    }
-
-    handle_receive_message(socket_fd, buffer);
-
-    // Send the file path destination
-    if (send(socket_fd, file_path_destination, strlen(file_path_destination), 0) == -1)
-    {
-        perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
-    }
-
-    handle_receive_message(socket_fd, buffer);
-
     message_t *message = (message_t *)malloc(sizeof(message_t));
     message->buffer = buffer;
     message->upload = upload;
