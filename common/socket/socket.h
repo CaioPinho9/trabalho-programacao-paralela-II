@@ -35,6 +35,6 @@ void send_offset_size(int socket_fd, message_t *message, char *file_path);
 
 int send_file(int socket_fd, message_t *message, char *file_path_origin);
 
-int handle_receive_message(int socket_fd, char **buffer);
+int handle_receive_message(int socket_fd, char *buffer);
 
 #endif // SOCKET_H

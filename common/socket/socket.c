@@ -27,21 +27,23 @@ void send_message(int socket_fd, message_t *message)
     {
         perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
     }
-    handle_receive_message(socket_fd, &message->buffer);
+    handle_receive_message(socket_fd, message->buffer);
 }
 
 void send_upload(int socket_fd, message_t *message)
 {
     printf("Enviando upload...\n");
     char upload_char = message->upload ? '1' : '0';
-    message->buffer = &upload_char;
+    strncpy(message->buffer, &upload_char, 1);
+    message->buffer[1] = '\0';
     send_message(socket_fd, message);
 }
 
 void send_file_path(int socket_fd, message_t *message, char *file_path)
 {
     printf("Enviando caminho do arquivo...\n");
-    message->buffer = file_path;
+    strncpy(message->buffer, file_path, BUFFER_SIZE - 1);
+    message->buffer[BUFFER_SIZE - 1] = '\0';
     send_message(socket_fd, message);
 }
 
@@ -54,7 +56,8 @@ void send_offset_size(int socket_fd, message_t *message, char *file_path)
     long size = get_size_file(file_path_with_part);
     char size_str[8];
     sprintf(size_str, "%ld", size);
-    message->buffer = size_str;
+    strncpy(message->buffer, size_str, sizeof(size_str));
+    message->buffer[sizeof(size_str)] = '\0';
     free(file_path_with_part);
     send(socket_fd, message->buffer, strlen(message->buffer), 0);
     printf("Enviando tamanho do arquivo: %s\n", message->buffer);
@@ -110,7 +113,7 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin)
         {
             perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
         }
-        handle_receive_message(socket_fd, &message->buffer);
+        handle_receive_message(socket_fd, message->buffer);
     }
 
     fclose(file);
@@ -118,10 +121,9 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin)
     return 0;
 }
 
-int handle_receive_message(int socket_fd, char **buffer)
+int handle_receive_message(int socket_fd, char *buffer)
 {
-    int valread = recv(socket_fd, *buffer, BUFFER_SIZE, 0);
-    printf("Recebido: %s\n", *buffer);
+    int valread = recv(socket_fd, buffer, BUFFER_SIZE, 0);
     if (valread == 0)
     {
         perror(SERVER_CLOSED_EXCEPTION);
@@ -133,14 +135,14 @@ int handle_receive_message(int socket_fd, char **buffer)
         return -1;
     }
 
-    (*buffer)[valread] = '\0';
-    if (strcmp(*buffer, FILE_EXISTS_EXCEPTION) == 1)
+    buffer[valread] = '\0';
+    if (strcmp(buffer, FILE_EXISTS_EXCEPTION) == 1)
     {
         perror(FILE_EXISTS_EXCEPTION);
         return -1;
     }
 
-    if (strcmp(*buffer, FILE_NOT_FOUND_EXCEPTION) == 1)
+    if (strcmp(buffer, FILE_NOT_FOUND_EXCEPTION) == 1)
     {
         perror(FILE_NOT_FOUND_EXCEPTION);
         return -1;

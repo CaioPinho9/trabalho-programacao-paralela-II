@@ -32,7 +32,9 @@ int receive_file(int socket_fd, message_t *message)
 {
     while (1)
     {
-        int valread = handle_receive_message(socket_fd, &message->buffer);
+        int valread = handle_receive_message(socket_fd, message->buffer);
+
+        printf("Recebido: %s\n", message->buffer);
 
         int result = handle_write_part_file(message->buffer, valread, message);
 
@@ -63,7 +65,6 @@ int main(int argc, char const *argv[])
     parse_arguments(argv[2], &host_destination, &file_path_destination);
 
     upload = strcmp(host_origin, "127.0.0.1") == 0;
-    upload = 0;
 
     if (upload)
     {
@@ -76,7 +77,6 @@ int main(int argc, char const *argv[])
 
     int socket_fd;
     struct sockaddr_in address;
-    char buffer[BUFFER_SIZE];
 
     create_socket(&socket_fd, &address, host_server);
 
