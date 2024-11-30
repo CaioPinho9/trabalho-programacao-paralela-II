@@ -11,6 +11,8 @@
 #define PORT 8080
 #define BUFFER_SIZE 256
 
+int verbose = 0;
+
 void parse_arguments(const char *arg, char **host, char **file_path)
 {
     char *colon = strchr(arg, ':');
@@ -28,13 +30,11 @@ void parse_arguments(const char *arg, char **host, char **file_path)
     }
 }
 
-int receive_file(int socket_fd, message_t *message)
+int receive_file(int socket_fd, message_t *message, int verbose)
 {
     while (1)
     {
-        int valread = handle_receive_message(socket_fd, message->buffer);
-
-        printf("Recebido: %s\n", message->buffer);
+        int valread = handle_receive_message(socket_fd, message->buffer, verbose);
 
         int result = handle_write_part_file(message->buffer, valread, message);
 
@@ -105,7 +105,7 @@ int main(int argc, char const *argv[])
         send_file_path(socket_fd, message, file_path_origin);
         message->file_path = file_path_destination;
         send_offset_size(socket_fd, message, file_path_destination);
-        receive_file(socket_fd, message);
+        receive_file(socket_fd, message, verbose);
     }
 
     close(socket_fd);

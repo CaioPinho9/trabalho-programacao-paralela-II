@@ -40,6 +40,8 @@ void kill_process_on_port(int port)
     }
 }
 
+int verbose = 0;
+
 #define MAX_messageS 10
 
 int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
@@ -49,13 +51,12 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
     if (message->upload == -1)
     {
         message->upload = atoi(buffer);
-        printf("Upload: %d\n", message->upload);
         send(socket_fd, buffer, strlen(buffer), 0);
+        verbose_printf("Mensagem: %d\n", message->buffer);
     }
     else if (message->file_path == NULL)
     {
         message->file_path = strdup(buffer);
-        printf("File path: %s\n", message->file_path);
 
         if (message->upload)
         {
@@ -64,6 +65,7 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
         else
         {
             send(socket_fd, buffer, strlen(buffer), 0);
+            verbose_printf("Mensagem: %d\n", message->buffer);
         }
     }
     else if (message->upload)
@@ -74,10 +76,10 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
             return 0;
         }
         send(socket_fd, buffer, strlen(buffer), 0);
+        verbose_printf("Mensagem: %d\n", message->buffer);
     }
     else
     {
-        printf("Enviando arquivo...\n");
         if (send_file(socket_fd, message, message->file_path) == -1)
         {
             perror(FILE_NOT_FOUND_EXCEPTION);
@@ -97,8 +99,8 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd)
         int valread = read(*socket_fd, buffer, BUFFER_SIZE);
         if (valread == 0)
         {
-            // messagee desconectado
-            printf("messagee no socket %d desconectado\n", *socket_fd);
+            // Client desconectado
+            printf("Client no socket %d desconectado\n", *socket_fd);
             close(*socket_fd);
             *socket_fd = -1;
             message->upload = -1;
