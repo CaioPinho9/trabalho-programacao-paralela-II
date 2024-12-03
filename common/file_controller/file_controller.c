@@ -48,10 +48,10 @@ int get_part_file_path(char *file_path, char **file_path_with_part)
     return 0;
 }
 
-int handle_write_part_file(char *buffer, int valread, message_t *message)
+int handle_write_part_file(char *buffer, int valread, message_t *message, int verbose)
 {
-    printf("Escrevendo no arquivo...\n");
-    printf("Buffer: %s\n", buffer);
+    verbose_printf(verbose, "Escrevendo no arquivo...\n");
+    verbose_printf(verbose, "Buffer: %s\n", buffer);
     char *file_path_with_part;
     get_part_file_path(message->file_path, &file_path_with_part);
 
@@ -74,7 +74,7 @@ int handle_write_part_file(char *buffer, int valread, message_t *message)
         ftruncate(fileno(file), ftell(file));
         fclose(file);
 
-        printf("Renomeando %s to %s...\n", file_path_with_part, message->file_path);
+        verbose_printf(verbose, "Renomeando %s to %s...\n", file_path_with_part, message->file_path);
         rename(file_path_with_part, message->file_path);
         printf("Arquivo %s recebido com sucesso\n", message->file_path);
         free(file_path_with_part);
@@ -95,7 +95,7 @@ int file_exists(char *file_path)
     return 1;
 }
 
-long get_size_file(char *file_path)
+long get_size_file(char *file_path, int verbose)
 {
     FILE *file = fopen(file_path, "r");
     if (file == NULL)
@@ -106,6 +106,6 @@ long get_size_file(char *file_path)
     fseek(file, 0, SEEK_END);
     long size = ftell(file);
     fclose(file);
-    printf("Tamanho do arquivo %s: %ld bytes\n", file_path, size);
+    verbose_printf(verbose, "Tamanho do arquivo %s: %ld bytes\n", file_path, size);
     return size;
 }

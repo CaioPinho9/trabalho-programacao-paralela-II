@@ -36,7 +36,7 @@ int receive_file(int socket_fd, message_t *message, int verbose)
     {
         int valread = handle_receive_message(socket_fd, message->buffer, verbose);
 
-        int result = handle_write_part_file(message->buffer, valread, message);
+        int result = handle_write_part_file(message->buffer, valread, message, verbose);
 
         if (result != 0)
         {
@@ -48,9 +48,9 @@ int receive_file(int socket_fd, message_t *message, int verbose)
 
 int main(int argc, char const *argv[])
 {
-    if (argc != 3)
+    if (argc < 3 || argc > 4)
     {
-        printf("Usage: ./client [host:]file_path_origin [host:]file_path_destination\n");
+        printf("Usage: ./client [host:]file_path_origin [host:]file_path_destination [-v]\n");
         return 1;
     }
 
@@ -63,6 +63,8 @@ int main(int argc, char const *argv[])
 
     parse_arguments(argv[1], &host_origin, &file_path_origin);
     parse_arguments(argv[2], &host_destination, &file_path_destination);
+
+    verbose = argc == 4 && strcmp(argv[3], "-v") == 0;
 
     upload = strcmp(host_origin, "127.0.0.1") == 0;
 
@@ -95,16 +97,16 @@ int main(int argc, char const *argv[])
     // Send data from file
     if (upload)
     {
-        send_upload(socket_fd, message);
-        send_file_path(socket_fd, message, file_path_destination);
-        send_file(socket_fd, message, file_path_origin);
+        send_upload(socket_fd, message, verbose);
+        send_file_path(socket_fd, message, file_path_destination, verbose);
+        send_file(socket_fd, message, file_path_origin, verbose);
     }
     else
     {
-        send_upload(socket_fd, message);
-        send_file_path(socket_fd, message, file_path_origin);
+        send_upload(socket_fd, message, verbose);
+        send_file_path(socket_fd, message, file_path_origin, verbose);
         message->file_path = file_path_destination;
-        send_offset_size(socket_fd, message, file_path_destination);
+        send_offset_size(socket_fd, message, file_path_destination, verbose);
         receive_file(socket_fd, message, verbose);
     }
 

@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <stdarg.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include "socket.h"
 #include "../../common/file_controller/file_controller.h"
 
@@ -49,7 +50,7 @@ void send_offset_size(int socket_fd, message_t *message, char *file_path, int ve
 {
     char *file_path_with_part;
     get_part_file_path(file_path, &file_path_with_part);
-    long size = get_size_file(file_path_with_part);
+    long size = get_size_file(file_path_with_part, verbose);
     char size_str[8];
     sprintf(size_str, "%ld", size);
     strncpy(message->buffer, size_str, sizeof(size_str));
@@ -69,6 +70,10 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin, int ver
     }
 
     FILE *file = fopen(abs_path, "r");
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
     if (file == NULL)
     {
         perror(FILE_NOT_FOUND_EXCEPTION);
@@ -97,6 +102,18 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin, int ver
         }
 
         send_message(socket_fd, message, verbose);
+
+        if (!verbose)
+        {
+            static time_t last_time = 0;
+            time_t current_time = time(NULL);
+            if (current_time != last_time)
+            {
+                printf("%.2f%% ", (ftell(file) / (double)size) * 100);
+                last_time = current_time;
+                fflush(stdout);
+            }
+        }
     }
     if (!eof)
     {
@@ -109,6 +126,7 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin, int ver
         verbose_printf(verbose, "Enviado EOF\n");
         handle_receive_message(socket_fd, message->buffer, 0);
     }
+    verbose_printf(!verbose, "100.00%%\n");
 
     fclose(file);
     free(abs_path);

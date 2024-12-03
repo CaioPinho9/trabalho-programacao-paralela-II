@@ -15,9 +15,9 @@ int get_abs_path(char *file_path, char **abs_path);
 
 int get_part_file_path(char *file_path, char **file_path_with_part);
 
-int handle_write_part_file(char *buffer, int valread, message_t *client);
+int handle_write_part_file(char *buffer, int valread, message_t *client, int verbose);
 
-long get_size_file(char *file_path);
+long get_size_file(char *file_path, int verbose);
 
 int file_exists(char *file_path);
 

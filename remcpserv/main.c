@@ -42,9 +42,10 @@ void kill_process_on_port(int port)
 
 int verbose = 0;
 
-#define MAX_messageS 10
+#define MAX_CLIENTS 10
+#define MAX_THROTTLE 10
 
-int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
+int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, int verbose)
 {
     buffer[valread] = '\0';
 
@@ -52,7 +53,7 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
     {
         message->upload = atoi(buffer);
         send(socket_fd, buffer, strlen(buffer), 0);
-        verbose_printf("Mensagem: %d\n", message->buffer);
+        verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
     }
     else if (message->file_path == NULL)
     {
@@ -60,27 +61,27 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message)
 
         if (message->upload)
         {
-            send_offset_size(socket_fd, message, message->file_path);
+            send_offset_size(socket_fd, message, message->file_path, verbose);
         }
         else
         {
             send(socket_fd, buffer, strlen(buffer), 0);
-            verbose_printf("Mensagem: %d\n", message->buffer);
+            verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
         }
     }
     else if (message->upload)
     {
-        if (handle_write_part_file(buffer, valread, message) == -1)
+        if (handle_write_part_file(buffer, valread, message, verbose) == -1)
         {
             perror(INVALID_FILE_PATH_EXCEPTION);
             return 0;
         }
         send(socket_fd, buffer, strlen(buffer), 0);
-        verbose_printf("Mensagem: %d\n", message->buffer);
+        verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
     }
     else
     {
-        if (send_file(socket_fd, message, message->file_path) == -1)
+        if (send_file(socket_fd, message, message->file_path, verbose) == -1)
         {
             perror(FILE_NOT_FOUND_EXCEPTION);
             return 0;
@@ -108,21 +109,23 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd)
             memset(message->buffer, 0, BUFFER_SIZE);
             return 0;
         }
-        return handle_buffer(buffer, valread, *socket_fd, message);
+        return handle_buffer(buffer, valread, *socket_fd, message, verbose);
     }
     return 0;
 }
 
-int main()
+int main(int argc, char const *argv[])
 {
     kill_process_on_port(PORT);
 
     int socket_fd, new_socket;
     struct sockaddr_in address;
-    struct pollfd poolfd[MAX_messageS + 1];
-    message_t messages[MAX_messageS + 1];
+    struct pollfd poolfd[MAX_CLIENTS + 1];
+    message_t messages[MAX_CLIENTS + 1];
     int addrlen = sizeof(address);
     int activity;
+
+    verbose = argc == 2 && strcmp(argv[1], "-v") == 0;
 
     create_socket(&socket_fd, &address, NULL);
 
@@ -143,7 +146,7 @@ int main()
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i <= MAX_messageS; i++)
+    for (int i = 0; i <= MAX_CLIENTS; i++)
     {
         poolfd[i].fd = -1;
         messages[i].upload = -1;
@@ -151,7 +154,7 @@ int main()
         messages[i].buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
     }
 
-    for (int i = 0; i <= MAX_messageS; i++)
+    for (int i = 0; i <= MAX_CLIENTS; i++)
     {
         poolfd[i].fd = -1;
     }
@@ -163,7 +166,7 @@ int main()
 
     while (1)
     {
-        activity = poll(poolfd, MAX_messageS + 1, -1);
+        activity = poll(poolfd, MAX_CLIENTS + 1, -1);
 
         if (activity < 0)
         {
@@ -183,7 +186,7 @@ int main()
 
             printf("Nova conexão aceita, socket fd: %d\n", new_socket);
 
-            for (int i = 1; i <= MAX_messageS; i++)
+            for (int i = 1; i <= MAX_CLIENTS; i++)
             {
                 if (poolfd[i].fd == -1)
                 {
@@ -197,7 +200,7 @@ int main()
         // clang-format off
         #pragma omp parallel for schedule(static, 1)
         // clang-format on
-        for (int i = 1; i <= MAX_messageS; i++)
+        for (int i = 1; i <= MAX_CLIENTS; i++)
         {
             if (handle_message_activity(&messages[i], &poolfd[i]) == -1)
             {

@@ -25,15 +25,15 @@ typedef struct message_t
 
 void create_socket(int *socket_fd, struct sockaddr_in *address, char *host_destination);
 
-void send_message(int socket_fd, message_t *message);
+void send_message(int socket_fd, message_t *message, int verbose);
 
-void send_upload(int socket_fd, message_t *message);
+void send_upload(int socket_fd, message_t *message, int verbose);
 
-void send_file_path(int socket_fd, message_t *message, char *file_path);
+void send_file_path(int socket_fd, message_t *message, char *file_path, int verbose);
 
-void send_offset_size(int socket_fd, message_t *message, char *file_path);
+void send_offset_size(int socket_fd, message_t *message, char *file_path, int verbose);
 
-int send_file(int socket_fd, message_t *message, char *file_path_origin);
+int send_file(int socket_fd, message_t *message, char *file_path_origin, int verbose);
 
 int handle_receive_message(int socket_fd, char *buffer, int verbose);
 
