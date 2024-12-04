@@ -9,6 +9,8 @@
 #include <omp.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <omp.h>
+#include <time.h>
 #include <string.h>
 #include "../common/file_controller/file_controller.h"
 #include "../common/socket/socket.h"
@@ -42,8 +44,9 @@ void kill_process_on_port(int port)
 
 int verbose = 0;
 
-#define MAX_CLIENTS 10
-#define MAX_THROTTLE 10
+#define MAX_CLIENTS 2
+#define MAX_THROTTLE 300
+#define THROTTLING_TIME 100000
 
 int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, int verbose)
 {
@@ -53,7 +56,6 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, 
     {
         message->upload = atoi(buffer);
         send(socket_fd, buffer, strlen(buffer), 0);
-        verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
     }
     else if (message->file_path == NULL)
     {
@@ -66,7 +68,6 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, 
         else
         {
             send(socket_fd, buffer, strlen(buffer), 0);
-            verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
         }
     }
     else if (message->upload)
@@ -77,7 +78,6 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, 
             return 0;
         }
         send(socket_fd, buffer, strlen(buffer), 0);
-        verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
     }
     else
     {
@@ -91,22 +91,29 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, 
     return 0;
 }
 
-int handle_message_activity(message_t *message, struct pollfd *poolfd)
+int handle_message_activity(message_t *message, struct pollfd *poolfd, int *client_count, int *request_count)
 {
     int *socket_fd = &poolfd->fd;
     char *buffer = message->buffer;
     if (*socket_fd != -1 && (poolfd->revents & POLLIN))
     {
         int valread = read(*socket_fd, buffer, BUFFER_SIZE);
+        // clang-format off
+        #pragma omp critical
+        (*request_count)++;
+        // clang-format on
         if (valread == 0)
         {
-            // Client desconectado
-            printf("Client no socket %d desconectado\n", *socket_fd);
+            printf("Client in socket %d disconnected\n", *socket_fd);
             close(*socket_fd);
             *socket_fd = -1;
             message->upload = -1;
             message->file_path = NULL;
             memset(message->buffer, 0, BUFFER_SIZE);
+            // clang-format off
+            #pragma omp critical
+            (*client_count)--;
+            // clang-format on
             return 0;
         }
         return handle_buffer(buffer, valread, *socket_fd, message, verbose);
@@ -114,9 +121,28 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd)
     return 0;
 }
 
+void reset_request_count(int *request_count)
+{
+    static time_t last_time = 0;
+    // Reset request count to 0 each 1s second
+    time_t current_time = time(NULL);
+    if (current_time - last_time >= 1)
+    {
+        // clang-format off
+        #pragma omp critical
+        // clang-format on
+        {
+            verbose_printf(verbose, "Rate: %d\n", *request_count);
+            *request_count = 0;
+        }
+        last_time = current_time;
+    }
+}
+
 int main(int argc, char const *argv[])
 {
     kill_process_on_port(PORT);
+    omp_set_nested(1);
 
     int socket_fd, new_socket;
     struct sockaddr_in address;
@@ -124,13 +150,12 @@ int main(int argc, char const *argv[])
     message_t messages[MAX_CLIENTS + 1];
     int addrlen = sizeof(address);
     int activity;
+    int client_count = 0;
+    int request_count = 0;
 
     verbose = argc == 2 && strcmp(argv[1], "-v") == 0;
 
     create_socket(&socket_fd, &address, NULL);
-
-    struct linger so_linger = {1, 0}; // Close immediately on shutdown
-    setsockopt(socket_fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
 
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
@@ -152,17 +177,13 @@ int main(int argc, char const *argv[])
         messages[i].upload = -1;
         messages[i].file_path = NULL;
         messages[i].buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
-    }
-
-    for (int i = 0; i <= MAX_CLIENTS; i++)
-    {
         poolfd[i].fd = -1;
     }
 
     poolfd[0].fd = socket_fd;
     poolfd[0].events = POLLIN;
 
-    printf("Escutando...\n");
+    printf("Listening...\n");
 
     while (1)
     {
@@ -178,13 +199,23 @@ int main(int argc, char const *argv[])
         if (poolfd[0].revents & POLLIN)
         {
             new_socket = accept(socket_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+            verbose_printf(verbose, "Clients %d\n", client_count);
             if (new_socket < 0)
             {
                 perror(ACCEPT_EXCEPTION);
                 continue;
             }
 
-            printf("Nova conexão aceita, socket fd: %d\n", new_socket);
+            if (client_count >= MAX_CLIENTS)
+            {
+                verbose_printf(verbose, "Connection rejected: Maximum clients reached\n");
+                close(new_socket);
+            }
+            else
+            {
+                client_count++;
+                verbose_printf(verbose, "New connection accepted, socket fd: %d\n", new_socket);
+            }
 
             for (int i = 1; i <= MAX_CLIENTS; i++)
             {
@@ -197,12 +228,25 @@ int main(int argc, char const *argv[])
             }
         }
 
+        reset_request_count(&request_count);
+
         // clang-format off
         #pragma omp parallel for schedule(static, 1)
         // clang-format on
         for (int i = 1; i <= MAX_CLIENTS; i++)
         {
-            if (handle_message_activity(&messages[i], &poolfd[i]) == -1)
+            int break_flag = 0;
+            // clang-format off
+            #pragma omp critical
+            // clang-format on
+            if (request_count >= MAX_THROTTLE)
+            {
+                verbose_printf(verbose, "Throttling...\n");
+                usleep(THROTTLING_TIME);
+                break_flag = 1;
+            }
+
+            if (!break_flag && handle_message_activity(&messages[i], &poolfd[i], &client_count, &request_count) == -1)
             {
                 close(socket_fd);
                 exit(EXIT_SUCCESS);

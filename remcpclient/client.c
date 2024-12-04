@@ -32,9 +32,10 @@ void parse_arguments(const char *arg, char **host, char **file_path)
 
 int receive_file(int socket_fd, message_t *message, int verbose)
 {
+    verbose_printf(verbose, "Receiving file...\n");
     while (1)
     {
-        int valread = handle_receive_message(socket_fd, message->buffer, verbose);
+        int valread = handle_receive_message(socket_fd, message->buffer);
 
         int result = handle_write_part_file(message->buffer, valread, message, verbose);
 
@@ -88,7 +89,7 @@ int main(int argc, char const *argv[])
         exit(EXIT_FAILURE);
     }
 
-    printf("Conectado ao servidor. Enviando arquivo..\n");
+    verbose_printf(verbose, "Connection to server..\n");
 
     message_t *message = (message_t *)malloc(sizeof(message_t));
     message->buffer = (char *)malloc(BUFFER_SIZE);

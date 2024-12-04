@@ -25,7 +25,7 @@ typedef struct message_t
 
 void create_socket(int *socket_fd, struct sockaddr_in *address, char *host_destination);
 
-void send_message(int socket_fd, message_t *message, int verbose);
+void send_message(int socket_fd, message_t *message);
 
 void send_upload(int socket_fd, message_t *message, int verbose);
 
@@ -35,7 +35,7 @@ void send_offset_size(int socket_fd, message_t *message, char *file_path, int ve
 
 int send_file(int socket_fd, message_t *message, char *file_path_origin, int verbose);
 
-int handle_receive_message(int socket_fd, char *buffer, int verbose);
+int handle_receive_message(int socket_fd, char *buffer);
 
 void verbose_printf(int verbose, const char *format, ...);
 

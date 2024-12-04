@@ -5,11 +5,13 @@
 #include <stdarg.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <sys/time.h>
 #include "socket.h"
 #include "../../common/file_controller/file_controller.h"
 
 void create_socket(int *socket_fd, struct sockaddr_in *address, char *host_destination)
 {
+    struct timeval timeout;
     if ((*socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror(SOCKET_CREATE_EXCEPTION);
@@ -18,36 +20,57 @@ void create_socket(int *socket_fd, struct sockaddr_in *address, char *host_desti
 
     address->sin_family = AF_INET;
     address->sin_port = htons(PORT);
-    address->sin_addr.s_addr = host_destination != NULL ? inet_addr(host_destination) : INADDR_ANY;
+    address->sin_addr.s_addr = host_destination != NULL ? inet_addr(host_destination) : INADDR_ANY; // Set receive timeout
+
+    timeout.tv_sec = 5;  // 5 seconds
+    timeout.tv_usec = 0; // 0 microseconds
+
+    if (setsockopt(*socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
+    {
+        perror("Error setting receive timeout");
+        close(*socket_fd);
+    }
+
+    // Set send timeout
+    if (setsockopt(*socket_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0)
+    {
+        perror("Error setting send timeout");
+        close(*socket_fd);
+    }
+
+    struct linger so_linger = {1, 0}; // Close immediately on shutdown
+    setsockopt(*socket_fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
 }
 
-void send_message(int socket_fd, message_t *message, int verbose)
+void send_message(int socket_fd, message_t *message)
 {
-    verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
     if (send(socket_fd, message->buffer, strlen(message->buffer), 0) == -1)
     {
         perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
     }
-    handle_receive_message(socket_fd, message->buffer, 0);
+    handle_receive_message(socket_fd, message->buffer);
 }
 
 void send_upload(int socket_fd, message_t *message, int verbose)
 {
+    verbose_printf(verbose, "Sending upload flag...\n");
     char upload_char = message->upload ? '1' : '0';
     strncpy(message->buffer, &upload_char, 1);
     message->buffer[1] = '\0';
-    send_message(socket_fd, message, verbose);
+    send_message(socket_fd, message);
 }
 
 void send_file_path(int socket_fd, message_t *message, char *file_path, int verbose)
 {
+    verbose_printf(verbose, "Sending file path...\n");
     strncpy(message->buffer, file_path, BUFFER_SIZE - 1);
     message->buffer[BUFFER_SIZE - 1] = '\0';
-    send_message(socket_fd, message, verbose);
+    send_message(socket_fd, message);
 }
 
 void send_offset_size(int socket_fd, message_t *message, char *file_path, int verbose)
 {
+    verbose_printf(verbose, "Sending offset size...\n");
     char *file_path_with_part;
     get_part_file_path(file_path, &file_path_with_part);
     long size = get_size_file(file_path_with_part, verbose);
@@ -57,13 +80,13 @@ void send_offset_size(int socket_fd, message_t *message, char *file_path, int ve
     message->buffer[sizeof(size_str)] = '\0';
     free(file_path_with_part);
     send(socket_fd, message->buffer, strlen(message->buffer), 0);
-    verbose_printf(verbose, "Mensagem: %s\n", message->buffer);
 }
 
 int send_file(int socket_fd, message_t *message, char *file_path_origin, int verbose)
 {
+    verbose_printf(verbose, "Sending file...\n");
     char *abs_path;
-    if (get_abs_path(file_path_origin, &abs_path) == -1)
+    if (get_abs_path(file_path_origin, &abs_path, verbose) == -1)
     {
         perror(INVALID_FILE_PATH_EXCEPTION);
         return -1;
@@ -101,15 +124,15 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin, int ver
             eof = 1;
         }
 
-        send_message(socket_fd, message, verbose);
+        send_message(socket_fd, message);
 
-        if (!verbose)
+        if (verbose)
         {
             static time_t last_time = 0;
             time_t current_time = time(NULL);
             if (current_time != last_time)
             {
-                printf("%.2f%% ", (ftell(file) / (double)size) * 100);
+                printf("%.2f%%\n", (ftell(file) / (double)size) * 100);
                 last_time = current_time;
                 fflush(stdout);
             }
@@ -124,16 +147,16 @@ int send_file(int socket_fd, message_t *message, char *file_path_origin, int ver
             perror(FAILED_TO_SEND_MESSAGE_EXCEPTION);
         }
         verbose_printf(verbose, "Enviado EOF\n");
-        handle_receive_message(socket_fd, message->buffer, 0);
+        handle_receive_message(socket_fd, message->buffer);
     }
-    verbose_printf(!verbose, "100.00%%\n");
+    verbose_printf(verbose, "100.00%%\n");
 
     fclose(file);
     free(abs_path);
     return 0;
 }
 
-int handle_receive_message(int socket_fd, char *buffer, int verbose)
+int handle_receive_message(int socket_fd, char *buffer)
 {
     int valread = recv(socket_fd, buffer, BUFFER_SIZE, 0);
     if (valread == 0)
@@ -159,7 +182,6 @@ int handle_receive_message(int socket_fd, char *buffer, int verbose)
         perror(FILE_NOT_FOUND_EXCEPTION);
         return -1;
     }
-    verbose_printf(verbose, "Mensagem: %s\n", buffer);
     return valread;
 }
 

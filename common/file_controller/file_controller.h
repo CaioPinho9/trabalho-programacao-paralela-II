@@ -11,7 +11,7 @@
 #define FILE_NOT_FOUND_EXCEPTION "File not found. [0001]\n"
 #define INVALID_FILE_PATH_EXCEPTION "Invalid file path. [0002]\n"
 
-int get_abs_path(char *file_path, char **abs_path);
+int get_abs_path(char *file_path, char **abs_path, int verbose);
 
 int get_part_file_path(char *file_path, char **file_path_with_part);
 
