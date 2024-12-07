@@ -97,10 +97,6 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd, int *clie
     if (*socket_fd != -1 && (poolfd->revents & POLLIN))
     {
         int valread = read(*socket_fd, buffer, BUFFER_SIZE);
-        // clang-format off
-        #pragma omp critical
-        (*request_count)++;
-        // clang-format on
         if (valread == 0)
         {
             printf("Client in socket %d disconnected\n", *socket_fd);
@@ -115,6 +111,10 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd, int *clie
             // clang-format on
             return 0;
         }
+        // clang-format off
+        #pragma omp critical
+        (*request_count)++;
+        // clang-format on
         return handle_buffer(buffer, valread, *socket_fd, message, verbose);
     }
     return 0;
