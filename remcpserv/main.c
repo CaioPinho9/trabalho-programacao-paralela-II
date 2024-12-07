@@ -185,6 +185,9 @@ int main(int argc, char const *argv[])
 
     create_socket(&socket_fd, &address, NULL);
 
+    struct linger so_linger = {1, 0}; // Close immediately on shutdown
+    setsockopt(socket_fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
+
     if (bind(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         perror(SOCKET_BIND_EXCEPTION);
