@@ -37,9 +37,6 @@ void create_socket(int *socket_fd, struct sockaddr_in *address, char *host_desti
         perror("Error setting send timeout");
         close(*socket_fd);
     }
-
-    struct linger so_linger = {1, 0}; // Close immediately on shutdown
-    setsockopt(*socket_fd, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger));
 }
 
 void send_message(int socket_fd, message_t *message)

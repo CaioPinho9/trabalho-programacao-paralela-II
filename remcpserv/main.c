@@ -273,11 +273,13 @@ int main(int argc, char const *argv[])
                 usleep(THROTTLING_TIME);
                 break_flag = 1;
             }
-
-            if (!break_flag && handle_message_activity(&messages[i], &poolfd[i], &client_count, &request_count) == -1)
+            if (!break_flag)
             {
-                close(socket_fd);
-                exit(EXIT_SUCCESS);
+                if (handle_message_activity(&messages[i], &poolfd[i], &client_count, &request_count) == -1)
+                {
+                    close(socket_fd);
+                    exit(EXIT_SUCCESS);
+                }
             }
         }
     }
