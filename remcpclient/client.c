@@ -8,9 +8,6 @@
 #include "../common/file_controller/file_controller.h"
 #include "../common/socket/socket.h"
 
-#define PORT 8080
-#define BUFFER_SIZE 256
-
 int verbose = 0;
 
 void parse_arguments(const char *arg, char **host, char **file_path)

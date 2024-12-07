@@ -43,10 +43,9 @@ void kill_process_on_port(int port)
 }
 
 int verbose = 0;
-
-#define MAX_CLIENTS 2
-#define MAX_THROTTLE 300
-#define THROTTLING_TIME 100000
+int MAX_CLIENTS = 2;
+int MAX_THROTTLE = 300;
+int THROTTLING_TIME = 100000;
 
 int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, int verbose)
 {
@@ -139,6 +138,34 @@ void reset_request_count(int *request_count)
     }
 }
 
+// Function to parse arguments
+void parse_arguments(int argc, char const *argv[])
+{
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "-v") == 0)
+        {
+            verbose = 1;
+        }
+        else if (strncmp(argv[i], "--max-clients=", 14) == 0)
+        {
+            MAX_CLIENTS = atoi(argv[i] + 14);
+        }
+        else if (strncmp(argv[i], "--max-throttle=", 15) == 0)
+        {
+            MAX_THROTTLE = atoi(argv[i] + 15);
+        }
+        else if (strncmp(argv[i], "--throttling-time=", 18) == 0)
+        {
+            THROTTLING_TIME = atoi(argv[i] + 18);
+        }
+        else
+        {
+            fprintf(stderr, "Unknown argument: %s\n", argv[i]);
+        }
+    }
+}
+
 int main(int argc, char const *argv[])
 {
     kill_process_on_port(PORT);
@@ -153,7 +180,8 @@ int main(int argc, char const *argv[])
     int client_count = 0;
     int request_count = 0;
 
-    verbose = argc == 2 && strcmp(argv[1], "-v") == 0;
+    printf("Usage: ./main [-v] [--max-clients=x] [--max-throttle=x] [--throttling-time=x]\n");
+    parse_arguments(argc, argv);
 
     create_socket(&socket_fd, &address, NULL);
 

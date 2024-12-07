@@ -14,7 +14,7 @@
 #define FAILED_TO_RECEIVE_MESSAGE_EXCEPTION "Failed to receive message. [0108]\n"
 
 #define PORT 8080
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 128
 
 typedef struct message_t
 {
