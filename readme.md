@@ -3,7 +3,7 @@
 ## server
 
 ```bash
-gcc -o main remcpserv/main.c -lpthread -fopenmp common/file_controller/file_controller.c common/socket/socket.c
+gcc -o server remcpserv/server.c -lpthread -fopenmp common/file_controller/file_controller.c common/socket/socket.c
 ```
 
 ## client

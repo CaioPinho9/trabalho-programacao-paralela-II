@@ -109,7 +109,7 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd, int *requ
         }
         // clang-format off
         #pragma omp critical
-        (*request_count)++;
+        (*request_count)+=valread;
         // clang-format on
         return handle_buffer(buffer, valread, *socket_fd, message, verbose);
     }
@@ -127,7 +127,7 @@ void reset_request_count(int *request_count)
         #pragma omp critical
         // clang-format on
         {
-            verbose_printf(verbose, "Rate: %d\n", *request_count);
+            verbose_printf(verbose, "Rate: %d bytes/s\n", *request_count);
             *request_count = 0;
         }
         last_time = current_time;
@@ -173,7 +173,7 @@ int main(int argc, char const *argv[])
     int activity;
     int request_count = 0;
 
-    printf("Usage: ./main [-v] [--max-clients=x] [--max-throttle=x] [--throttling-time=x]\n");
+    printf("Usage: ./server [-v] [--max-clients=x] [--max-throttle=x] [--throttling-time=x]\n");
     parse_arguments(argc, argv);
 
     struct pollfd poolfd[MAX_CLIENTS + 1];
@@ -263,7 +263,7 @@ int main(int argc, char const *argv[])
             // clang-format off
             #pragma omp critical
             // clang-format on
-            if (request_count >= MAX_THROTTLE)
+            if (request_count >= MAX_THROTTLE - BUFFER_SIZE)
             {
                 verbose_printf(verbose, "Throttling...\n");
                 usleep(THROTTLING_TIME);
