@@ -173,8 +173,6 @@ int main(int argc, char const *argv[])
 
     int socket_fd, new_socket;
     struct sockaddr_in address;
-    struct pollfd poolfd[MAX_CLIENTS + 1];
-    message_t messages[MAX_CLIENTS + 1];
     int addrlen = sizeof(address);
     int activity;
     int client_count = 0;
@@ -182,6 +180,9 @@ int main(int argc, char const *argv[])
 
     printf("Usage: ./main [-v] [--max-clients=x] [--max-throttle=x] [--throttling-time=x]\n");
     parse_arguments(argc, argv);
+
+    struct pollfd poolfd[MAX_CLIENTS + 1];
+    message_t messages[MAX_CLIENTS + 1];
 
     create_socket(&socket_fd, &address, NULL);
 
@@ -208,7 +209,6 @@ int main(int argc, char const *argv[])
         messages[i].upload = -1;
         messages[i].file_path = NULL;
         messages[i].buffer = (char *)malloc(BUFFER_SIZE * sizeof(char));
-        poolfd[i].fd = -1;
     }
 
     poolfd[0].fd = socket_fd;
@@ -237,25 +237,25 @@ int main(int argc, char const *argv[])
                 continue;
             }
 
-            if (client_count >= MAX_CLIENTS)
-            {
-                verbose_printf(verbose, "Connection rejected: Maximum clients reached\n");
-                close(new_socket);
-            }
-            else
-            {
-                client_count++;
-                verbose_printf(verbose, "New connection accepted, socket fd: %d\n", new_socket);
-            }
-
+            // Check if there is space for a new client
+            int slot_found = 0;
             for (int i = 1; i <= MAX_CLIENTS; i++)
             {
                 if (poolfd[i].fd == -1)
                 {
                     poolfd[i].fd = new_socket;
                     poolfd[i].events = POLLIN;
+                    client_count++;
+                    printf("New client connected. Total clients: %d\n", client_count);
+                    slot_found = 1;
                     break;
                 }
+            }
+
+            if (!slot_found)
+            {
+                printf("Too many clients connected. Refusing connection.\n");
+                close(new_socket); // Close the new connection
             }
         }
 
