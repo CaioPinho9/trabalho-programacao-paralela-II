@@ -90,7 +90,7 @@ int handle_buffer(char *buffer, int valread, int socket_fd, message_t *message, 
     return 0;
 }
 
-int handle_message_activity(message_t *message, struct pollfd *poolfd, int *client_count, int *request_count)
+int handle_message_activity(message_t *message, struct pollfd *poolfd, int *request_count)
 {
     int *socket_fd = &poolfd->fd;
     char *buffer = message->buffer;
@@ -105,10 +105,6 @@ int handle_message_activity(message_t *message, struct pollfd *poolfd, int *clie
             message->upload = -1;
             message->file_path = NULL;
             memset(message->buffer, 0, BUFFER_SIZE);
-            // clang-format off
-            #pragma omp critical
-            (*client_count)--;
-            // clang-format on
             return 0;
         }
         // clang-format off
@@ -175,7 +171,6 @@ int main(int argc, char const *argv[])
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     int activity;
-    int client_count = 0;
     int request_count = 0;
 
     printf("Usage: ./main [-v] [--max-clients=x] [--max-throttle=x] [--throttling-time=x]\n");
@@ -230,7 +225,6 @@ int main(int argc, char const *argv[])
         if (poolfd[0].revents & POLLIN)
         {
             new_socket = accept(socket_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-            verbose_printf(verbose, "Clients %d\n", client_count);
             if (new_socket < 0)
             {
                 perror(ACCEPT_EXCEPTION);
@@ -245,8 +239,7 @@ int main(int argc, char const *argv[])
                 {
                     poolfd[i].fd = new_socket;
                     poolfd[i].events = POLLIN;
-                    client_count++;
-                    printf("New client connected. Total clients: %d\n", client_count);
+                    printf("New client connected.");
                     slot_found = 1;
                     break;
                 }
@@ -278,7 +271,7 @@ int main(int argc, char const *argv[])
             }
             if (!break_flag)
             {
-                if (handle_message_activity(&messages[i], &poolfd[i], &client_count, &request_count) == -1)
+                if (handle_message_activity(&messages[i], &poolfd[i], &request_count) == -1)
                 {
                     close(socket_fd);
                     exit(EXIT_SUCCESS);
