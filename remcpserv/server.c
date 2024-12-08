@@ -250,6 +250,10 @@ int main(int argc, char const *argv[])
                 printf("Too many clients connected. Refusing connection.\n");
                 close(new_socket); // Close the new connection
             }
+            else
+            {
+                send(new_socket, "OK", 2, 0);
+            }
         }
 
         reset_request_count(&request_count);

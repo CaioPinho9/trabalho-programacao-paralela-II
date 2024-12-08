@@ -77,20 +77,31 @@ int main(int argc, char const *argv[])
 
     int socket_fd;
     struct sockaddr_in address;
-
-    create_socket(&socket_fd, &address, host_server);
-
-    if (connect(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
-    {
-        perror(CONNECTION_EXCEPTION);
-        exit(EXIT_FAILURE);
-    }
-
-    verbose_printf(verbose, "Connection to server..\n");
-
     message_t *message = (message_t *)malloc(sizeof(message_t));
     message->buffer = (char *)malloc(BUFFER_SIZE);
     message->upload = upload;
+    
+    verbose_printf(verbose, "Connection to server..\n");
+
+    while (1)
+    {
+        create_socket(&socket_fd, &address, host_server);
+
+        if (connect(socket_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+        {
+            perror(CONNECTION_EXCEPTION);
+            exit(EXIT_FAILURE);
+        }
+
+        if (recv(socket_fd, message->buffer, BUFFER_SIZE, 0) == -1)
+        {
+            printf("Failed to connect to server. Retrying...\n");
+            sleep(1);
+            close(socket_fd);
+            continue;
+        }
+        break;
+    }
 
     // Send data from file
     if (upload)
