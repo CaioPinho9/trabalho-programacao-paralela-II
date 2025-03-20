@@ -80,7 +80,7 @@ int main(int argc, char const *argv[])
     message_t *message = (message_t *)malloc(sizeof(message_t));
     message->buffer = (char *)malloc(BUFFER_SIZE);
     message->upload = upload;
-    
+
     verbose_printf(verbose, "Connection to server..\n");
 
     while (1)
